@@ -157,6 +157,87 @@ Across all four projects, the same principles apply:
 
 ---
 
+## 💬 Key Talking Points (Interview-Ready)
+
+These are the high-signal points that demonstrate production engineering maturity — not just "I used the service", but *how* and *why*:
+
+### 1. End-to-End AI Lifecycle Ownership
+> "I've built systems that cover the full AI lifecycle — from data ingestion and model training, through real-time inference and agentic orchestration, all the way to production monitoring and automated rollback. This isn't a collection of tutorials; it's an integrated production stack."
+
+### 2. Responsible AI by Design
+> "Every project embeds governance from day one — prompt versioning, hallucination detection, bias evaluation, human-in-the-loop gates. I treat AI safety as a first-class architectural concern, not an afterthought."
+
+### 3. Bridging PoC → Production
+> "The hardest engineering problem in AI isn't calling the model — it's making it production-ready. I've built the CI/CD pipelines, canary deployments, drift detection, and approval workflows that let AI ship safely at scale."
+
+### 4. Agentic AI with Guardrails
+> "I've implemented multi-step reasoning agents that know their own boundaries — they escalate high-risk decisions, validate outputs against ground truth, and gracefully degrade when confidence is low."
+
+### 5. Enterprise-Grade Observability
+> "My monitoring isn't just CloudWatch dashboards. It's proactive drift detection, automated bias re-evaluation, context-aware alerting, and full input/output audit trails with PII redaction."
+
+---
+
+## 🏗️ Design Decisions & Trade-Offs
+
+| Decision | Rationale | Trade-Off Accepted |
+|----------|-----------|-------------------|
+| **Bedrock over self-hosted LLMs** | Managed scaling, no GPU infra to maintain, SOC2/HIPAA compliance inherited from AWS | Less control over model weights; cost scales with token volume rather than fixed compute |
+| **SageMaker Pipelines over Airflow/Kubeflow** | Native AWS integration, built-in model registry, no separate orchestration infra | Vendor lock-in to AWS; less portable than Kubeflow if multi-cloud is needed |
+| **OpenSearch Serverless for RAG** | Zero-ops vector store, automatic scaling, tight Bedrock Knowledge Base integration | Higher per-query cost at scale vs. self-managed OpenSearch; less tuning control |
+| **CDK (Python) over Terraform** | Same language as ML code (Python), type-safe constructs, AWS-native L2/L3 abstractions | Smaller community than Terraform; harder to go multi-cloud later |
+| **Kinesis over Kafka (MSK)** | Fully serverless, simpler operational model for event streaming at moderate scale | Lower throughput ceiling; less ecosystem tooling than Kafka |
+| **Canary deployment over shadow mode** | Real user validation of new model; catches production-only edge cases | Risk of degraded UX for canary traffic if model underperforms |
+| **Prompt registry in S3 (versioned) over database** | Immutable versions via S3 versioning, easy IAM-based access control, audit trail built-in | Less queryable than a database; requires wrapper tooling for search/compare |
+| **Human-in-the-loop for high-risk vs. full automation** | Regulatory compliance, reduced blast radius, builds trust with stakeholders | Slower response time for flagged interactions; requires on-call human reviewers |
+
+### Decisions I'd Make Differently at Scale
+
+- **At >1M daily inferences:** Move from Lambda-based orchestration to ECS Fargate for sustained compute, reducing cold-start latency
+- **At multi-region:** Introduce DynamoDB Global Tables and cross-region SageMaker endpoints with Route 53 failover
+- **At multi-model serving:** Adopt SageMaker Multi-Model Endpoints or inference components to consolidate GPU resources
+- **If going multi-cloud:** Replace CDK with Terraform, replace Kinesis with Confluent Kafka, and abstract the ML platform behind a Kubeflow/MLflow layer
+
+---
+
+## 📈 Market Relevance & Industry Alignment
+
+This portfolio directly maps to the capabilities most in-demand across AI/ML engineering roles in 2024–2025:
+
+| Industry Trend | How This Portfolio Demonstrates It |
+|---------------|-----------------------------------|
+| **Agentic AI adoption** (Gartner Top 10 2025) | Project 2 implements production-ready agents with reasoning, tool use, and guardrails |
+| **AI Governance & Responsible AI** (EU AI Act, NIST AI RMF) | Prompt versioning, bias monitoring, model cards, human-in-the-loop — across all projects |
+| **MLOps maturity** (ML Engineering > Data Science) | Project 4 shows full CI/CD for ML with approval gates, canary deploys, and traceability |
+| **RAG as enterprise standard** | Knowledge Base integration with hallucination detection and structured output validation |
+| **Real-time personalisation** (recommender systems) | Project 1 combines collaborative filtering with LLM-powered natural language search |
+| **Drift & model degradation** (operational ML) | Project 3 provides continuous monitoring with proactive alerting before business impact |
+| **Infrastructure as Code for AI** | Every project is reproducible via CDK — no ClickOps, no snowflake environments |
+| **Cost-aware architecture** | Serverless-first design (Lambda, Kinesis, Bedrock) minimises idle cost; scales to zero |
+
+### Certifications & Frameworks Alignment
+
+This work demonstrates competencies aligned with:
+- **AWS Certified Machine Learning — Specialty** domain coverage
+- **AWS Well-Architected Framework (ML Lens)** — operational excellence, security, reliability, performance, cost optimisation
+- **NIST AI Risk Management Framework** — governance, mapping, measurement, management
+- **Google's MLOps Maturity Model** — Level 2 (automated training + automated deployment with monitoring)
+
+---
+
+## 🎯 What Sets This Apart
+
+| What Most Portfolios Show | What This Portfolio Shows |
+|--------------------------|--------------------------|
+| Jupyter notebooks with model training | Full production deployment with CI/CD and rollback |
+| "I called the Bedrock API" | Agentic orchestration with error recovery and hallucination handling |
+| Static model accuracy metrics | Continuous drift detection with automated re-evaluation |
+| README with a diagram | Versioned prompts, model cards, bias reports, and audit trails |
+| Single-service demos | Multi-service architectures with event-driven data pipelines |
+| No governance story | Enterprise-grade governance baked into every layer |
+
+---
+
 ## Running the Projects Locally
 
 Each project includes a `README.md` with prerequisites, setup steps, and a local development mode using LocalStack or moto for AWS service mocking.
