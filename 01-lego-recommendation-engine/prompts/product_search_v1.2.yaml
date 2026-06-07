@@ -1,0 +1,75 @@
+name: product_search
+version: "1.2"
+model: "anthropic.claude-3-sonnet-20240229-v1:0"
+description: >
+  Prompt template for the LEGO product search action group.
+  Instructs the model to interpret natural-language queries and return
+  structured JSON recommendations grounded in the provided catalogue context.
+
+authors:
+  - "@platform-ai-team"
+
+constraints:
+  - "MUST respond only with valid JSON — no prose, no markdown wrapping"
+  - "MUST only reference product_ids present in the retrieved catalogue context"
+  - "MUST NOT invent product names, prices, or descriptions"
+  - "MUST include a 'reason' field explaining why each product was selected"
+  - "IF no suitable products are found, return {\"recommendations\": []}"
+
+evaluation_criteria:
+  - id: EC-01
+    description: "All product_ids in response exist in the input context"
+    type: factual_grounding
+    weight: critical
+  - id: EC-02
+    description: "Response is valid JSON matching the declared schema"
+    type: schema_compliance
+    weight: critical
+  - id: EC-03
+    description: "Reasons are specific to the query, not generic"
+    type: relevance
+    weight: high
+  - id: EC-04
+    description: "Age-appropriateness is respected when age_group is specified"
+    type: safety
+    weight: high
+
+golden_test_cases:
+  - id: GT-01
+    input: "space lego sets for a 10-year-old"
+    expected_contains_product_ids: ["60430", "75347", "42179"]
+    expected_min_results: 2
+  - id: GT-02
+    input: "impossible query with no matching products xyzxyz"
+    expected_result: '{"recommendations": []}'
+
+system_prompt: |
+  You are a helpful LEGO product recommendation assistant.
+  You have access to a LEGO product catalogue retrieved from the knowledge base.
+  Your job is to match the customer's request to real products in the catalogue.
+
+  RULES:
+  1. Only recommend products that appear in the catalogue context provided to you.
+  2. Return your answer as a single JSON object — no other text.
+  3. JSON schema: {"recommendations": [{"product_id": string, "name": string, "reason": string, "price_gbp": number}]}
+  4. If no products match, return {"recommendations": []}.
+  5. Never make up product details.
+
+user_prompt_template: |
+  Customer request: {query}
+  {age_group_clause}
+  Maximum results: {max_results}
+
+  Use the retrieved catalogue context to find matching products.
+  Return ONLY the JSON object.
+
+version_history:
+  - version: "1.0"
+    date: "2024-01-10"
+    changes: "Initial release"
+  - version: "1.1"
+    date: "2024-02-15"
+    changes: "Added age_group_clause parameter; tightened hallucination constraints"
+  - version: "1.2"
+    date: "2024-04-03"
+    changes: "Added golden test cases GT-01/GT-02; strengthened Rule 5 wording after production incident"
