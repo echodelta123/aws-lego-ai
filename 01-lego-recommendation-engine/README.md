@@ -29,9 +29,9 @@ The system is designed to be production-ready and integrates with the rest of th
   │ Agent       │  │ Endpoint     │   │ (events)        │
   │ (Claude 3)  │  │ (LightGCN)   │   │                 │
   └──────┬──────┘  └──────┬───────┘   └────────┬────────┘
-         │                │                     │
-         │ Action groups  │                     │ Firehose
-         ▼                ▼                     ▼
+         │                │                    │
+         │ Action groups  │                    │ Firehose
+         ▼                ▼                    ▼
   ProductSearch     Graph inference       S3 Data Lake
          │                                    │
          ▼                                    │ Glue ETL
