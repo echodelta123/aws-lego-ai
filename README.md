@@ -77,10 +77,10 @@ graph TD
 
 | # | Project                      | Folder                           | AWS Services                                 | Summary                                |
 | - | ---------------------------- | -------------------------------- | -------------------------------------------- | -------------------------------------- |
-| 1 | [Graph AI Product Recommender](#project-1) | [`01-lego-recommendation-engine/`](01-lego-recommendation-engine/README.md)  | Bedrock, SageMaker, Kinesis, S3, DynamoDB    | LLM + graph ML recommendation system   |
-| 2 | [Customer Support Agent](#project-2) | [`02-customer-support-agent/`](02-customer-support-agent/README.md)| Bedrock Agents, OpenSearch, Lambda, SQS      | Conversational support with escalation |
-| 3 | [ML Model Monitoring & Governance](#project-3) | [`03-ml-model-monitoring/`](03-ml-model-monitoring/README.md) | SageMaker Model Monitor, Clarify, CloudWatch | Drift, bias, and prompt monitoring     |
-| 4 | [MLOps Production Pipeline](#project-4) | [`04-mlops-production-pipeline/`](04-mlops-production-pipeline/README.md)| CodePipeline, SageMaker Pipelines, CDK       | Training and deployment automation     |
+| 1 | Graph AI Product Recommender     | [`01-lego-recommendation-engine/`](01-lego-recommendation-engine/README.md)  | Bedrock, SageMaker, Kinesis, S3, DynamoDB    | LLM + graph ML recommendation system   |
+| 2 | Customer Support Agent           | [`02-customer-support-agent/`](02-customer-support-agent/README.md)| Bedrock Agents, OpenSearch, Lambda, SQS      | Conversational support with escalation |
+| 3 | ML Model Monitoring & Governance | [`03-ml-model-monitoring/`](03-ml-model-monitoring/README.md) | SageMaker Model Monitor, Clarify, CloudWatch | Drift, bias, and prompt monitoring     |
+| 4 | MLOps Production Pipeline        | [`04-mlops-production-pipeline/`](04-mlops-production-pipeline/README.md)| CodePipeline, SageMaker Pipelines, CDK       | Training and deployment automation     |
 
 ---
 
