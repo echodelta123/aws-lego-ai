@@ -1,16 +1,19 @@
 # Project 2: Customer Support Guardrail Layer
 
-## Production Agentic Architecture
+## Overview
 
-This project implements a conversational customer support built on **Amazon Bedrock Agents** that answers questions over enterprise knowledge bases (like LEGO policies and instructions).
+This project implements a customer support assistant built on Amazon Bedrock Agents. It answers questions using enterprise knowledge bases such as product documentation and internal policies.
 
-The system is designed with guardrails and patterns:
-- **Hallucination Mitigation** — Post-response confidence scoring with automated escalation to human queues when confidence is low.
-- **Pre-Execution Guardrails** — Dual-engine intent risk classifier executing risk-level triage before agent invocation to block prompt injection or sensitive actions.
-- **Immutable Prompt Governance** — S3-based prompt templates versioned via semantically-controlled releases and checked against golden-set regression test suites.
-- **Fault-Tolerant Pipelines** — Resilient workflow execution featuring dead-letter queue (DLQ) support and exponential-backoff retries.
-- **Ecosystem Integration**: Shares common schema and DynamoDB logging with the Product Recommendation engine (Project 1), and the SageMaker-backed monitoring and model governance workflows in Project 3/4.
-- **Prompt Verification**: Prompt changes run through the automated golden-set CI/CD test runner defined in the [ML Model Monitoring & Governance Framework (Project 3)](../03-ml-model-monitoring/README.md) before publishing.
+The focus is on making the system safe, predictable, and easy to govern in production.
+
+Key design goals:
+
+* **Reducing hallucinations** — responses are scored after generation, and low-confidence outputs are escalated to human review.
+* **Pre-request safety checks** — incoming requests are classified by risk level before the agent runs, helping block unsafe or sensitive actions early.
+* **Controlled prompt management** — prompts are versioned in S3 and promoted only after passing regression tests.
+* **Reliable execution** — retries, backoff logic, and dead-letter queues are used for failure handling.
+* **Shared platform integration** — uses the same logging and schema patterns as Project 1, and integrates with the monitoring and MLOps systems in Projects 3 and 4.
+* **Prompt testing pipeline** — changes to prompts must pass automated evaluation before being deployed.
 
 ---
 
@@ -22,79 +25,74 @@ User Query
     ▼
 API Gateway ──► Lambda Orchestrator
                     │
-                    ├─► Intent Risk Classifier (Lambda)
-                    │       │
-                    │       ├── LOW RISK ──► Bedrock Agent (Claude 3)
-                    │       │                   │
-                    │       │                   ├── Action: KnowledgeBaseQuery
-                    │       │                   │       └── Bedrock Knowledge Base
-                    │       │                   │           └── OpenSearch Serverless
-                    │       │                   │
-                    │       │                   ├── Action: WorkflowTrigger
-                    │       │                   │       └── Step Functions
-                    │       │                   │
-                    │       │                   └── Action: RecordDecision
-                    │       │                           └── DynamoDB (decision log)
-                    │       │
-                    │       └── HIGH RISK ──► Human Approval Queue (SQS)
-                    │                           └── SNS Notification
+                    ├─► Intent Risk Classifier
                     │
-                    └─► Confidence Scorer
+                    ├── LOW RISK ──► Bedrock Agent
+                    │                     │
+                    │                     ├─► Knowledge Base (OpenSearch)
+                    │                     ├─► Step Functions (workflows)
+                    │                     └─► DynamoDB (decision logs)
+                    │
+                    ├── HIGH RISK ──► Human Review Queue (SQS)
+                    │                     └─ SNS notification
+                    │
+                    └─► Confidence Scoring
                             │
-                            ├── CONFIDENCE >= 0.75 ──► Return response
-                            └── CONFIDENCE < 0.75  ──► Escalate to human
+                            ├── High confidence → return response
+                            └── Low confidence → escalate to human
 ```
 
 ---
 
 ## Key Files
 
-| File | Purpose |
-|------|---------|
-| `src/agent_orchestrator.py` | Main Lambda — orchestrates intent classification, agent invocation, confidence scoring |
-| `src/intent_classifier.py` | Risk-level classification before any agent action |
-| `src/confidence_scorer.py` | Post-response confidence scoring using a secondary Bedrock call |
-| `src/error_recovery.py` | Retry with exponential backoff; DLQ publishing for unrecoverable failures |
-| `src/decision_logger.py` | Immutable audit log for every agent decision and action taken |
-| `governance/prompt_registry.py` | Loads versioned prompt templates from S3; validates against golden test suite |
-| `governance/evaluate_prompt.py` | CI-runnable script: runs a prompt version against its golden tests |
-| `prompts/enterprise_assistant_v2.1.yaml` | Current production prompt template |
-| `tests/test_confidence_scorer.py` | Unit tests for confidence scoring and escalation logic |
-| `tests/test_intent_classifier.py` | Unit tests covering all risk boundary cases |
+| File                                     | Purpose                                           |
+| ---------------------------------------- | ------------------------------------------------- |
+| `src/agent_orchestrator.py`              | Main Lambda function coordinating the workflow    |
+| `src/intent_classifier.py`               | Classifies request risk level before execution    |
+| `src/confidence_scorer.py`               | Scores responses and decides whether to escalate  |
+| `src/error_recovery.py`                  | Handles retries and sends failures to DLQ         |
+| `src/decision_logger.py`                 | Logs all decisions and actions for audit purposes |
+| `governance/prompt_registry.py`          | Loads versioned prompts from S3                   |
+| `governance/evaluate_prompt.py`          | Runs automated tests on prompt versions           |
+| `prompts/enterprise_assistant_v2.1.yaml` | Current production prompt                         |
+| `tests/test_confidence_scorer.py`        | Tests for scoring and escalation logic            |
+| `tests/test_intent_classifier.py`        | Tests for risk classification                     |
 
 ---
 
-## Governance Model
-
-### Prompt Lifecycle
+## Prompt Lifecycle
 
 ```
-Draft (local YAML)
+Local draft (YAML)
       │
       ▼
-evaluate_prompt.py ──► Run golden tests ──► FAIL? ──► Back to draft
-      │ PASS
-      ▼
-Pull request review by AI governance lead
-      │ Approved
-      ▼
-Upload to S3: prompts/{name}/v{major}.{minor}.yaml
+Run evaluation tests (evaluate_prompt.py)
       │
-      ▼
-Semantic version pinned in application config
+      ├── Fail → revise prompt
       │
-      ▼
-Production — IMMUTABLE (S3 versioning, no delete)
+      └── Pass
+            │
+            ▼
+Code review / approval
+            │
+            ▼
+Upload to S3 (versioned)
+            │
+            ▼
+Pinned in production config (immutable)
 ```
 
-### Risk Boundaries
+---
 
-| Risk Level | Criteria | Action |
-|------------|----------|--------|
-| LOW | Information retrieval, summarisation | Agent proceeds autonomously |
-| MEDIUM | Data modification, external notification | Agent proceeds, decision logged with enhanced detail |
-| HIGH | Financial transactions, system configuration changes, legal decisions | Routed to human approval queue; agent does NOT act |
-| BLOCKED | Detected sensitive categories (PII requests, security bypass attempts) | Rejected immediately; security team alerted |
+## Risk Model
+
+| Level   | What it covers                                 | System behavior            |
+| ------- | ---------------------------------------------- | -------------------------- |
+| Low     | General questions, summaries                   | Agent responds normally    |
+| Medium  | Operational actions or structured workflows    | Allowed, fully logged      |
+| High    | Financial, legal, or system-impacting actions  | Sent to human review queue |
+| Blocked | Prompt injection, sensitive or unsafe requests | Rejected immediately       |
 
 ---
 
@@ -102,9 +100,9 @@ Production — IMMUTABLE (S3 versioning, no delete)
 
 ```bash
 pip install -r requirements.txt
-python -m pytest tests/ -v
+pytest tests/ -v
 
-# Validate a prompt template against its golden tests
+# Run prompt evaluation
 python governance/evaluate_prompt.py --prompt prompts/enterprise_assistant_v2.1.yaml
 
 # Deploy
@@ -113,9 +111,12 @@ cd infra && cdk deploy EnterpriseAssistantStack
 
 ---
 
-## Infrastructure Cost Optimization & Resource Efficiency
+## Cost and Resource Design
 
-To eliminate baseline compute overhead and optimize resources in non-production environments:
-- **Serverless-First Compute & Queues** — API Gateway, Lambda, SQS, and SNS operate fully serverless. During periods of inactivity, non-production environments scale to zero, resulting in **$0.00/month** compute fees.
-- **Knowledge Base Fallback Index** — In development profiles, active Amazon OpenSearch Serverless clusters (~$140/month baseline) are bypassed in favor of local, lightweight vector indices (FAISS/SQLite) to ensure zero active infrastructure overhead.
-- **Observability Profile Integration** — Request traces and latency metadata are pushed to hosted observability platforms (Langfuse Cloud) using standard free-tier quotas, eliminating the need to maintain persistent telemetry instances in development environments.
+The system is built to avoid unnecessary baseline costs in development environments:
+
+* **Fully serverless architecture** (Lambda, API Gateway, SQS, SNS) so idle usage costs are near zero.
+* **Knowledge base fallback** replaces OpenSearch Serverless in dev with lightweight local vector stores.
+* **Observability tools** rely on hosted/free-tier usage rather than dedicated infrastructure in non-prod environments.
+
+---
