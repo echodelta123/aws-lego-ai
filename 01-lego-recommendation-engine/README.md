@@ -1,13 +1,14 @@
 # Project 1: Graph AI Recommendation Engine
 
-## Overview & Graph AI Architecture
+## Overview
 
-This project implements the product discovery and recommendation engine. It integrates a conversational AI with a Graph Machine Learning model ( **Amazon Bedrock agent** connected to a **SageMaker Graph Collaborative Filtering (LightGCN) model**) to generate personalized product recommendations.
+This project powers the product recommendation and discovery experience. It combines a conversational interface using Amazon Bedrock with a graph-based recommendation model running on SageMaker (LightGCN).
 
-The architecture is built for production operations:
-- **MLOps Pipeline Integration**: The Graph Neural Network (LightGCN) recommendation model is automatically trained, evaluated, and registered via the [MLOps Production Pipeline (Project 4)](../04-mlops-production-pipeline/README.md) and served through a blue/green endpoint deployment.
-- **ML Observability Integration**: The deployed real-time inference endpoint is continuously audited for feature attribution drift (SHAP value shifts) and embedding distribution drift via the [ML Model Monitoring & Governance Framework (Project 3)](../03-ml-model-monitoring/README.md).
-- **Behavioral Event Pipeline**: User clickstream events and model recommendation states are streamed via Amazon Kinesis into an S3 Data Lake, providing the raw edges and nodes required for retraining runs.
+The system is designed to be production-ready and integrates with the rest of the platform for training, monitoring, and event tracking.
+
+* **MLOps integration**: The LightGCN model is trained, evaluated, and deployed through the MLOps pipeline in Project 4, using controlled blue/green deployments.
+* **Monitoring and governance**: The inference endpoint is continuously monitored for drift and feature distribution changes through the ML monitoring framework in Project 3.
+* **Event pipeline**: User interactions and recommendation events are streamed through Kinesis into S3, forming the basis for retraining.
 
 ---
 
@@ -15,48 +16,44 @@ The architecture is built for production operations:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Client-Facing Orchestration Layer                              │
+│  Client Layer                                                  │
 │                                                                 │
-│  Browser/App ──► API Gateway ──► Lambda Orchestrator           │
+│  Browser/App ──► API Gateway ──► Lambda Orchestrator          │
 └──────────────────────────┬──────────────────────────────────────┘
                            │
            ┌───────────────┼───────────────────┐
            │               │                   │
            ▼               ▼                   ▼
   ┌─────────────┐  ┌──────────────┐   ┌─────────────────┐
-  │  Bedrock    │  │  SageMaker   │   │  Kinesis Data   │
-  │  Agent      │  │  Endpoint    │   │  Stream         │
-  │  (Claude 3) │  │  (LightGCN)  │   │  (events)       │
+  │ Bedrock     │  │ SageMaker    │   │ Kinesis Stream  │
+  │ Agent       │  │ Endpoint     │   │ (events)        │
+  │ (Claude 3)  │  │ (LightGCN)   │   │                 │
   └──────┬──────┘  └──────┬───────┘   └────────┬────────┘
          │                │                     │
-         │  Action Groups │                     │ Firehose
-         │  ┌─────────────┘                     ▼
-         │  │                          ┌─────────────────┐
-         │  ▼                          │  S3 Data Lake   │
-         │  ProductSearch              └────────┬────────┘
-         │  GraphLookup                         │ Glue ETL
-         │  CatalogueValidator                  ▼
-         │                            ┌─────────────────┐
-         │  Knowledge Base            │  SageMaker      │
-         │  └──► OpenSearch Serverless│  Feature Store  │
-         │         (Product KG)       └─────────────────┘
+         │ Action groups  │                     │ Firehose
+         ▼                ▼                     ▼
+  ProductSearch     Graph inference       S3 Data Lake
+         │                                    │
+         ▼                                    │ Glue ETL
+  OpenSearch (Product KG)                     ▼
+                                      SageMaker Feature Store
 ```
 
 ---
 
 ## Key Files
 
-| File | Purpose |
-|------|---------|
-| `src/orchestrator.py` | Lambda entrypoint — routes requests, validates inputs, calls Bedrock Agent |
-| `src/recommendation_model.py` | SageMaker model wrapper — input schema validation, inference, GNN output scoring |
-| `src/behaviour_tracker.py` | Publishes clickstream events to Kinesis with schema enforcement |
-| `src/guardrails.py` | Grounding guardrail — validates agent outputs against a catalogue registry |
-| `src/audit_logger.py` | Writes model I/O, latency, and decision context to DynamoDB audit table |
-| `infra/stack.py` | CDK stack defining all AWS resources |
-| `prompts/product_search_v1.2.yaml` | Versioned prompt template for the product search action |
-| `tests/test_guardrails.py` | Unit tests for catalogue grounding logic |
-| `tests/test_recommendation_model.py` | Unit tests for inference input validation |
+| File                                 | Purpose                                                   |
+| ------------------------------------ | --------------------------------------------------------- |
+| `src/orchestrator.py`                | Lambda entry point that routes requests and calls Bedrock |
+| `src/recommendation_model.py`        | Wrapper around SageMaker LightGCN inference               |
+| `src/behaviour_tracker.py`           | Sends clickstream events to Kinesis                       |
+| `src/guardrails.py`                  | Ensures outputs match the product catalogue               |
+| `src/audit_logger.py`                | Logs requests, latency, and model outputs to DynamoDB     |
+| `infra/stack.py`                     | CDK infrastructure definition                             |
+| `prompts/product_search_v1.2.yaml`   | Versioned prompt template                                 |
+| `tests/test_guardrails.py`           | Tests for grounding and validation logic                  |
+| `tests/test_recommendation_model.py` | Tests for inference validation                            |
 
 ---
 
@@ -64,27 +61,31 @@ The architecture is built for production operations:
 
 ```bash
 pip install -r requirements.txt
-# Run unit tests with mocked AWS services (moto)
+
+# Run tests (with mocked AWS services)
 python -m pytest tests/ -v
 
-# Deploy to AWS (requires configured credentials)
+# Deploy infrastructure
 cd infra && cdk deploy LegoRecommendationStack
 ```
 
 ---
 
-## Governance & Guardrails
+## Governance and Guardrails
 
-- **Schema Validation**: Inputs are validated via Pydantic models before reaching the Bedrock agent or SageMaker endpoint.
-- **Output Grounding**: Agent recommendations are cross-checked against the DynamoDB product catalogue. Any product code not found in the catalogue is removed to prevent hallucinations from reaching client apps.
-- **Audit Logging**: Every invocation registers a request ID, inputs, raw embeddings metadata, scores, and execution latency.
-- **Immutable Prompts**: Prompts are stored in S3 using semantically versioned directories, preventing manual inline prompt overrides in production.
+* **Input validation**: All inputs are validated using structured schemas before reaching the model or agent.
+* **Output grounding**: Recommendations are checked against the product catalogue. Invalid or unknown product IDs are filtered out.
+* **Audit logging**: Each request is logged with inputs, outputs, metadata, and latency.
+* **Prompt versioning**: Prompts are stored in S3 with versioning to ensure changes are controlled and traceable.
 
 ---
 
-## Cost Optimization & Resource Efficiency
+## Cost and Efficiency
 
-To optimize non-production environments and prevent baseline compute overhead, the service employs:
-- **SageMaker Serverless Endpoints**: The GNN inference endpoint runs serverless, scaling down to 0 concurrency when idle. Non-production environments run at **$0.00/month** baseline, billing only per-millisecond of execution time during active testing.
-- **Pay-Per-Token LLM Billing**: Amazon Bedrock invokes Claude 3 Sonnet dynamically, scaling to zero costs when idle. Active testing averages **<$1.00/month**.
-- **Local Profile Mocking**: Local testing routes clickstream events and catalog interactions through `moto`/LocalStack, completely bypassing AWS ingestion charges.
+The system is designed to scale down in development and testing environments:
+
+* **SageMaker serverless endpoints** scale to zero when idle, so non-production usage is effectively near-zero cost.
+* **Bedrock usage** is pay-per-token, so costs only appear during active requests.
+* **Local development** uses mocked AWS services (moto/LocalStack), avoiding cloud costs during testing.
+
+---
